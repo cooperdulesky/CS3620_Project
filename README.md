@@ -13,13 +13,16 @@ The application provides a command-line interface (CLI) for the checkpoint demon
 ## Public Datasets Used
 1.  **USDA PLANTS Database:**
     * **Type:** CSV Import (Reference Data)
-    * **Usage:** Populates the `ref_species` table with scientific names, common names, and families to ensure accurate plant identification.
+    * **Usage:** Created a much smaller table of only about 30 common plants because I felt much of the giant database would go unused. Populates the `ref_species` table with scientific names, common names, and families to ensure accurate plant identification.
+    * **Link:** https://plants.usda.gov/downloads
 2.  **Open-Meteo API:**
     * **Type:** REST API (Public Domain)
     * **Usage:** Daily weather metrics (Temperature, Rainfall, Wind) are ingested into the `bg_weather_daily` table to track environmental history for every user location.
+    * **Link:** https://open-meteo.com
 3.  **Plant Disease Environmental Model:**
     * **Type:** CSV Import (Kaggle Dataset)
     * **Usage:** Populates `ref_disease_model` to correlate specific temperature/humidity ranges with the likelihood of plant diseases.
+    * **Link:** https://www.kaggle.com/datasets/turakut/plant-disease-classification
 
 ## How to Run
 1.  **Database Setup:** Import the `schema.sql` file into your MySQL server to create the 12 tables.
