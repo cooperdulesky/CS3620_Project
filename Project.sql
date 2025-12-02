@@ -126,6 +126,99 @@ CREATE TABLE alerts (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+
+/* SproutLog Expansion Pack
+   Adding 8 Tables to reach the 20-Table Requirement
+*/
+
+USE sproutlog;
+
+-- --- SECTION 5: FINANCES & SUPPLIERS ---
+
+-- 13. Suppliers (Where did you buy seeds/tools?)
+CREATE TABLE suppliers (
+    supplier_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    website VARCHAR(255),
+    rating INT CHECK (rating BETWEEN 1 AND 5)
+);
+
+-- 14. Expenses (Track cost of gardening)
+CREATE TABLE expenses (
+    expense_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    supplier_id INT,
+    item_name VARCHAR(100),
+    amount DECIMAL(10, 2),
+    purchase_date DATE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id)
+);
+
+-- --- SECTION 6: TOOLS & RESOURCES ---
+
+-- 15. Reference list of Tool Types (Shovel, Rake, Hoe)
+CREATE TABLE ref_tool_types (
+    type_id INT AUTO_INCREMENT PRIMARY KEY,
+    category VARCHAR(50), -- e.g., 'Digging', 'Pruning'
+    tool_name VARCHAR(100)
+);
+
+-- 16. User Tools (What tools do I own?)
+CREATE TABLE user_tools (
+    tool_instance_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type_id INT,
+    purchase_date DATE,
+    condition_status ENUM('New', 'Good', 'Rusted', 'Broken'),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (type_id) REFERENCES ref_tool_types(type_id)
+);
+
+-- 17. Fertilizers (Reference Data)
+CREATE TABLE ref_fertilizers (
+    fertilizer_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100),
+    npk_ratio VARCHAR(20), -- e.g., '10-10-10'
+    instructions TEXT
+);
+
+-- 18. Fertilizer Schedule (Linking plants to fertilizers)
+CREATE TABLE plant_fertilizer_link (
+    link_id INT AUTO_INCREMENT PRIMARY KEY,
+    inventory_id INT NOT NULL,
+    fertilizer_id INT NOT NULL,
+    last_applied DATE,
+    next_due DATE,
+    FOREIGN KEY (inventory_id) REFERENCES plants_inventory(inventory_id) ON DELETE CASCADE,
+    FOREIGN KEY (fertilizer_id) REFERENCES ref_fertilizers(fertilizer_id)
+);
+
+-- --- SECTION 7: SOCIAL FEATURES ---
+
+-- 19. Social Posts (Sharing garden pics)
+CREATE TABLE social_posts (
+    post_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    content_text TEXT,
+    image_url VARCHAR(255),
+    posted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 20. Comments (Community interaction)
+CREATE TABLE post_comments (
+    comment_id INT AUTO_INCREMENT PRIMARY KEY,
+    post_id INT NOT NULL,
+    user_id INT NOT NULL,
+    comment_text VARCHAR(255),
+    commented_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES social_posts(post_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+
+
 -- show tables for demo
 SELECT * FROM users;
 SELECT * FROM bg_weather_daily;
@@ -141,4 +234,5 @@ TRUNCATE TABLE users;
 TRUNCATE TABLE bg_weather_daily;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
 
