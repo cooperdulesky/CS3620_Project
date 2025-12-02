@@ -3,12 +3,17 @@
 ## Project Goal
 SproutLog is a data-driven gardening management application designed to help users track their plant inventory and monitor growing conditions. By integrating specific garden data with public biological and environmental datasets, the app provides intelligent insights—such as correlating plant growth with historical weather patterns and analyzing potential disease risks based on daily environmental logs.
 
-## Interaction Description
-The application provides a command-line interface (CLI) for the checkpoint demonstration:
-1.  **User Onboarding:** Users create secure accounts with password hashing and location data (Zip Code).
-2.  **Dynamic Geocoding:** The app uses the **Zippopotam.us API** to convert user Zip Codes into precise Latitude/Longitude coordinates automatically.
-3.  **Inventory Management:** Users browse the imported **USDA** plant database and "plant" species in their virtual gardens.
-4.  **Environmental Logging:** The system automatically fetches real-time daily weather (Max/Min/Rain) via the **Open-Meteo API** and logs it to the database to create a historical record of growing conditions.
+## Application Features (GUI)
+The application has been upgraded from a CLI to a full **Graphical User Interface (GUI)** built with Python/Tkinter.
+* **User Authentication:** Secure login screen with password hashing and automatic account creation.
+* **Dynamic Geocoding:** Integrates the **Zippopotam.us API** to auto-detect location coordinates from Zip Codes.
+* **Live Weather:** Integrates the **Open-Meteo API** to fetch and log daily weather metrics (Temp/Rain) for the user's specific location.
+* **Inventory Management (CRUD):**
+    * **Create:** "Plant" new crops by selecting from the USDA reference database.
+    * **Read:** View all plants with sorting and filtering options.
+    * **Update:** Mark plants as "Harvested" to track status changes.
+    * **Delete:** Remove plants (with auto-resetting ID logic for clean demos).
+    * **Filter:** Real-time search bar to find plants by nickname.
 
 ## Public Datasets Used
 1.  **USDA PLANTS Database:**
@@ -25,22 +30,23 @@ The application provides a command-line interface (CLI) for the checkpoint demon
     * **Link:** https://www.kaggle.com/datasets/turakut/plant-disease-classification
 
 ## How to Run
-1.  **Database Setup:** Import the `schema.sql` file into your MySQL server to create the 12 tables.
+1.  **Database Setup:** Import the `schema.sql` file into your MySQL server to create the 20 tables.
 2.  **Install Dependencies:**
     ```bash
     pip install mysql-connector-python requests
     ```
-3.  **Configure:** Update the `db_config` dictionary in `app.py` with your local MySQL password.
+3.  **Configure:** Update the `db_config` dictionary in `gui_app.py` with your local MySQL password.
 4.  **Run:**
     ```bash
-    python app.py
+    python gui_app.py
     ```
 
-## Database Schema
-The database consists of 12 tables organized into Core Data, Reference Data, Operational Logs, and Gamification.
+## Database Schema (20 Tables)
+The database structure has been expanded to support Finances, Tools, and Social features.
 
 ```mermaid
 erDiagram
+    %% --- CORE USER & LOCATIONS ---
     USERS {
         int user_id PK
         string email
@@ -62,16 +68,14 @@ erDiagram
         int user_id FK
         string name
     }
+
+    %% --- INVENTORY & OPERATIONS ---
     PLANTS_INVENTORY {
         int inventory_id PK
         int garden_id FK
         int species_id FK
         string nickname
-    }
-    REF_SPECIES {
-        int species_id PK
-        string common_name
-        string scientific_name
+        string status
     }
     CARE_LOGS {
         int log_id PK
@@ -83,17 +87,74 @@ erDiagram
         int inventory_id FK
         int quantity
     }
+
+    %% --- REFERENCE DATA ---
+    REF_SPECIES {
+        int species_id PK
+        string common_name
+        string scientific_name
+    }
     BG_WEATHER_DAILY {
         int weather_id PK
         string zip_code
-        date record_date
         float temp_max_f
+        float precipitation_inches
     }
     REF_DISEASE_MODEL {
         int model_id PK
         float temperature
         float humidity
         int disease_present
+    }
+
+    %% --- FINANCES & SUPPLIERS ---
+    SUPPLIERS {
+        int supplier_id PK
+        string name
+        int rating
+    }
+    EXPENSES {
+        int expense_id PK
+        int user_id FK
+        int supplier_id FK
+        float amount
+    }
+
+    %% --- TOOLS & RESOURCES ---
+    REF_TOOL_TYPES {
+        int type_id PK
+        string category
+        string tool_name
+    }
+    USER_TOOLS {
+        int tool_instance_id PK
+        int user_id FK
+        int type_id FK
+        string condition
+    }
+    REF_FERTILIZERS {
+        int fertilizer_id PK
+        string name
+        string npk_ratio
+    }
+    PLANT_FERTILIZER_LINK {
+        int link_id PK
+        int inventory_id FK
+        int fertilizer_id FK
+        date next_due
+    }
+
+    %% --- SOCIAL & GAMIFICATION ---
+    SOCIAL_POSTS {
+        int post_id PK
+        int user_id FK
+        string content_text
+    }
+    POST_COMMENTS {
+        int comment_id PK
+        int post_id FK
+        int user_id FK
+        string comment_text
     }
     COMMUNITY_CHALLENGES {
         int challenge_id PK
@@ -105,18 +166,37 @@ erDiagram
         string status
     }
 
-    %% Hard Relationships (Foreign Keys)
+    %% --- RELATIONSHIPS ---
+    
+    %% User Ownership
     USERS ||--o{ GARDENS : owns
     USERS ||--o{ SESSIONS : has
     USERS ||--o{ ALERTS : receives
-    USERS ||--o{ USER_CHALLENGES : joins
-    COMMUNITY_CHALLENGES ||--o{ USER_CHALLENGES : defined_by
-    
+    USERS ||--o{ EXPENSES : incurs
+    USERS ||--o{ USER_TOOLS : owns
+    USERS ||--o{ SOCIAL_POSTS : creates
+    USERS ||--o{ POST_COMMENTS : writes
+    USERS ||--o{ USER_CHALLENGES : participates_in
+
+    %% Inventory Logic
     GARDENS ||--o{ PLANTS_INVENTORY : contains
     REF_SPECIES ||--o{ PLANTS_INVENTORY : classifies
-    
-    PLANTS_INVENTORY ||--o{ CARE_LOGS : records
-    PLANTS_INVENTORY ||--o{ HARVESTS : yields
+    PLANTS_INVENTORY ||--o{ CARE_LOGS : requires
+    PLANTS_INVENTORY ||--o{ HARVESTS : produces
+    PLANTS_INVENTORY ||--o{ PLANT_FERTILIZER_LINK : treated_with
+
+    %% Finances & Tools
+    SUPPLIERS ||--o{ EXPENSES : paid_to
+    REF_TOOL_TYPES ||--o{ USER_TOOLS : describes
+    REF_FERTILIZERS ||--o{ PLANT_FERTILIZER_LINK : describes
+
+    %% Social & Games
+    SOCIAL_POSTS ||--o{ POST_COMMENTS : receives
+    COMMUNITY_CHALLENGES ||--o{ USER_CHALLENGES : defines
+
+    %% Analytical Links (Logical)
+    USERS }|..|{ BG_WEATHER_DAILY : "located_in"
+    BG_WEATHER_DAILY }|..|{ REF_DISEASE_MODEL : "analyzed_against"
 
     %% Logical Relationships (Analysis)
     USERS }|..|{ BG_WEATHER_DAILY : "located_in (zip)"
