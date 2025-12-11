@@ -1,10 +1,10 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import mysql.connector
 import requests
 from datetime import date
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION
 db_config = {
     'host': 'localhost',
     'user': 'root',
@@ -12,12 +12,12 @@ db_config = {
     'database': 'SproutLog'
 }
 
-# --- API HELPER FUNCTIONS ---
+# --- API HELPER FUNCTIONS
 def get_lat_lon_from_zip(zip_code):
     try:
         url = f"http://api.zippopotam.us/us/{zip_code}"
         response = requests.get(url)
-        if response.status_code == 404: return (39.32, -82.10, "Unknown") # Default Athens
+        if response.status_code == 404: return (39.32, -82.10, "Unknown")
         data = response.json()
         place = data['places'][0]
         return float(place['latitude']), float(place['longitude']), place['place name']
@@ -41,14 +41,13 @@ def get_daily_weather(lat, lon):
     except:
         return None
 
-# --- MAIN GUI CLASS ---
+# --- MAIN GUI CLASS
 class SproutLogGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("SproutLog Manager")
-        self.root.geometry("900x700")
+        self.root.title("SproutLog Manager (Final Version)")
+        self.root.geometry("1000x800")
         
-        # Connect to DB
         try:
             self.conn = mysql.connector.connect(**db_config)
             self.cursor = self.conn.cursor()
@@ -56,26 +55,19 @@ class SproutLogGUI:
             messagebox.showerror("Connection Error", f"Could not connect to DB: {e}")
             return
 
-        # Start with the Login Screen
         self.show_login_screen()
 
-    # ===========================
-    # PART 1: LOGIN & ONBOARDING
-    # ===========================
+    # --- LOGIN
     def show_login_screen(self):
         self.login_frame = tk.Frame(self.root, bg="#e8f5e9")
         self.login_frame.pack(fill="both", expand=True)
 
-        # Title
         tk.Label(self.login_frame, text="🌱 SproutLog", font=("Helvetica", 32, "bold"), bg="#e8f5e9", fg="#2e7d32").pack(pady=(60, 10))
-        # Subtitle
         tk.Label(self.login_frame, text="Garden Management System", font=("Arial", 14), bg="#e8f5e9", fg="#444444").pack(pady=10)
 
-        # Form Container
         form = tk.Frame(self.login_frame, bg="white", padx=40, pady=40, relief="raised")
         form.pack(pady=20)
 
-        # --- UPDATED LABELS (Forced Black Text for Mac Dark Mode) ---
         tk.Label(form, text="Email Address:", bg="white", fg="black", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", pady=10)
         self.ent_email = ttk.Entry(form, width=30)
         self.ent_email.grid(row=0, column=1, pady=10)
@@ -84,15 +76,14 @@ class SproutLogGUI:
         self.ent_name = ttk.Entry(form, width=30)
         self.ent_name.grid(row=1, column=1, pady=10)
 
-        tk.Label(form, text="Create Password:", bg="white", fg="black", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="w", pady=10)
+        tk.Label(form, text="Password:", bg="white", fg="black", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="w", pady=10)
         self.ent_pass = ttk.Entry(form, width=30, show="*")
         self.ent_pass.grid(row=2, column=1, pady=10)
 
-        tk.Label(form, text="Zip Code (for Weather):", bg="white", fg="black", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky="w", pady=10)
+        tk.Label(form, text="Zip Code (Weather):", bg="white", fg="black", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky="w", pady=10)
         self.ent_zip = ttk.Entry(form, width=30)
         self.ent_zip.grid(row=3, column=1, pady=10)
 
-        # Button
         ttk.Button(form, text="ENTER GARDEN ➤", command=self.process_login).grid(row=4, column=1, pady=20, sticky="ew")
 
     def process_login(self):
@@ -106,26 +97,22 @@ class SproutLogGUI:
             return
 
         try:
-            # 1. Create User
             self.cursor.execute("INSERT INTO users (email, display_name, password_hash, zip_code) VALUES (%s, %s, %s, %s)", 
                                 (email, name, password, zip_code))
             self.conn.commit()
             self.user_id = self.cursor.lastrowid
             
-            # 2. Create Default Gardens
             gardens = ["Backyard", "Front Yard", "Porch", "Greenhouse"]
             for g in gardens:
                 self.cursor.execute("INSERT INTO gardens (user_id, name) VALUES (%s, %s)", (self.user_id, g))
             self.conn.commit()
 
-            # 3. Get Weather Data
             self.current_zip = zip_code
             res = get_lat_lon_from_zip(zip_code)
             lat, lon, city_name = res
             self.weather_data = get_daily_weather(lat, lon)
             self.location_name = city_name
 
-            # 4. Save Weather to DB
             if self.weather_data:
                 sql = """INSERT INTO bg_weather_daily 
                          (zip_code, record_date, temp_max_f, temp_min_f, precipitation_inches, wind_speed_mph) 
@@ -135,32 +122,26 @@ class SproutLogGUI:
                                           self.weather_data['rain'], self.weather_data['wind'], self.weather_data['max']))
                 self.conn.commit()
 
-            # 5. Switch Screens
             self.login_frame.destroy()
             self.show_main_dashboard()
 
         except Exception as e:
-            # If email duplicates, just fetch the existing user
             if "Duplicate entry" in str(e):
                 self.cursor.execute("SELECT user_id FROM users WHERE email=%s", (email,))
                 self.user_id = self.cursor.fetchone()[0]
                 self.current_zip = zip_code
                 self.location_name = "Existing User Location"
-                self.weather_data = None # Skip weather for simplicity on re-login
+                self.weather_data = None 
                 self.login_frame.destroy()
                 self.show_main_dashboard()
             else:
                 messagebox.showerror("Login Error", str(e))
 
-    # ===========================
-    # PART 2: MAIN DASHBOARD
-    # ===========================
+    # --- PART 2: DASHBOARD ---
     def show_main_dashboard(self):
-        # --- Top Banner (Weather) ---
         banner = tk.Frame(self.root, bg="#2196f3", height=80)
         banner.pack(fill="x", side="top")
         
-        # Weather Text
         if self.weather_data:
             w_text = f"📍 {self.location_name} ({self.current_zip})  |  🌡️ High: {self.weather_data['max']}°F  Low: {self.weather_data['min']}°F  |  🌧️ Rain: {self.weather_data['rain']} in"
         else:
@@ -168,18 +149,94 @@ class SproutLogGUI:
             
         tk.Label(banner, text=w_text, font=("Arial", 14, "bold"), bg="#2196f3", fg="white").pack(pady=20)
 
-        # --- Tabs ---
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(pady=10, expand=True, fill="both")
 
         self.frame_inventory = ttk.Frame(self.notebook)
         self.frame_add = ttk.Frame(self.notebook)
+        self.frame_analytics = ttk.Frame(self.notebook)
+        self.frame_gardens = ttk.Frame(self.notebook) # new tab
         
-        self.notebook.add(self.frame_inventory, text="My Garden Inventory")
-        self.notebook.add(self.frame_add, text="Add New Plant")
+        self.notebook.add(self.frame_inventory, text="My Inventory")
+        self.notebook.add(self.frame_add, text="Add Plant")
+        self.notebook.add(self.frame_gardens, text="Manage Gardens") # new tab
+        self.notebook.add(self.frame_analytics, text="📊 Analytics Dashboard")
 
         self.setup_inventory_tab()
         self.setup_add_tab()
+        self.setup_analytics_tab()
+        self.setup_gardens_tab() # new tab
+
+    # --- NEW GARDEN MANAGEMENT TAB
+    def setup_gardens_tab(self):
+        # 1. List of Gardens
+        columns = ("ID", "Garden Name", "Length (ft)", "Width (ft)", "Sun Exposure")
+        self.tree_gardens = ttk.Treeview(self.frame_gardens, columns=columns, show="headings")
+        for col in columns:
+            self.tree_gardens.heading(col, text=col)
+            self.tree_gardens.column(col, width=100, anchor="center")
+        self.tree_gardens.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # 2. Edit Frame
+        edit_frame = ttk.LabelFrame(self.frame_gardens, text="Update Garden Details", padding=10)
+        edit_frame.pack(fill="x", padx=20, pady=10)
+
+        # Inputs
+        ttk.Label(edit_frame, text="Length (ft):").pack(side="left", padx=5)
+        self.ent_len = ttk.Entry(edit_frame, width=8)
+        self.ent_len.pack(side="left", padx=5)
+
+        ttk.Label(edit_frame, text="Width (ft):").pack(side="left", padx=5)
+        self.ent_width = ttk.Entry(edit_frame, width=8)
+        self.ent_width.pack(side="left", padx=5)
+
+        ttk.Label(edit_frame, text="Sun Exposure:").pack(side="left", padx=5)
+        self.combo_sun = ttk.Combobox(edit_frame, values=["Full Sun", "Partial Shade", "Full Shade"], state="readonly")
+        self.combo_sun.pack(side="left", padx=5)
+
+        ttk.Button(edit_frame, text="💾 Save Changes", command=self.update_garden_details).pack(side="left", padx=20)
+        
+        # Load Data
+        self.refresh_gardens_list()
+
+    def refresh_gardens_list(self):
+        for row in self.tree_gardens.get_children(): self.tree_gardens.delete(row)
+        
+        # Select all details including the NULLs
+        sql = "SELECT garden_id, name, length_ft, width_ft, sun_exposure FROM gardens WHERE user_id=%s"
+        self.cursor.execute(sql, (self.user_id,))
+        for row in self.cursor.fetchall():
+            # If data is None, show "Not Set"
+            display_row = list(row)
+            for i in range(len(display_row)):
+                if display_row[i] is None: display_row[i] = "-"
+            self.tree_gardens.insert("", "end", values=display_row)
+
+    def update_garden_details(self):
+        selected = self.tree_gardens.selection()
+        if not selected:
+            messagebox.showwarning("Select Garden", "Please click on a garden in the list above.")
+            return
+
+        garden_id = self.tree_gardens.item(selected[0])['values'][0]
+        length = self.ent_len.get()
+        width = self.ent_width.get()
+        sun = self.combo_sun.get()
+
+        if not length or not width or not sun:
+            messagebox.showerror("Missing Info", "Please fill out Length, Width, and Sun Exposure.")
+            return
+
+        try:
+            sql = "UPDATE gardens SET length_ft=%s, width_ft=%s, sun_exposure=%s WHERE garden_id=%s"
+            self.cursor.execute(sql, (length, width, sun, garden_id))
+            self.conn.commit()
+            
+            messagebox.showinfo("Success", "Garden details updated!")
+            self.log_audit("UPDATE_GARDEN", "gardens", garden_id)
+            self.refresh_gardens_list()
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
     def setup_inventory_tab(self):
         filter_frame = ttk.LabelFrame(self.frame_inventory, text="Filter Options")
@@ -194,19 +251,17 @@ class SproutLogGUI:
 
         columns = ("ID", "Nickname", "Species", "Planted Date", "Status", "Location")
         self.tree = ttk.Treeview(self.frame_inventory, columns=columns, show="headings")
-        
         for col in columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=120, anchor="center")
-            
         self.tree.pack(fill="both", expand=True, padx=10, pady=5)
 
         btn_frame = ttk.Frame(self.frame_inventory)
         btn_frame.pack(fill="x", padx=10, pady=10)
         
-        ttk.Button(btn_frame, text="Mark as Harvested (Update)", command=self.update_status).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="Mark Harvested (Update)", command=self.update_status).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="⚠️ Report Sickness", command=self.report_sickness).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Delete Plant", command=self.delete_plant).pack(side="right", padx=5)
-        
         self.refresh_table()
 
     def setup_add_tab(self):
@@ -225,7 +280,6 @@ class SproutLogGUI:
         self.combo_species.grid(row=1, column=1, sticky="ew", pady=10)
 
         ttk.Label(form_frame, text="Select Location:", font=("Arial", 12)).grid(row=2, column=0, sticky="w", pady=10)
-        # Reload gardens to check for user specific ones
         self.cursor.execute("SELECT garden_id, name FROM gardens WHERE user_id=%s", (self.user_id,))
         self.garden_map = {name: gid for gid, name in self.cursor.fetchall()}
         self.combo_garden = ttk.Combobox(form_frame, values=list(self.garden_map.keys()), state="readonly", font=("Arial", 12))
@@ -234,22 +288,52 @@ class SproutLogGUI:
         
         ttk.Button(form_frame, text="🌱 PLANT IT", command=self.create_plant).grid(row=3, column=1, pady=30, sticky="ew")
 
-    # --- CRUD FUNCTIONS ---
+    def setup_analytics_tab(self):
+        lbl = tk.Label(self.frame_analytics, text="Species Yield Performance (Mart Data)", font=("Arial", 16, "bold"))
+        lbl.pack(pady=20)
+        columns = ("Species Name", "Total Plants Grown")
+        self.tree_analytics = ttk.Treeview(self.frame_analytics, columns=columns, show="headings")
+        self.tree_analytics.heading("Species Name", text="Species Name")
+        self.tree_analytics.heading("Total Plants Grown", text="Total Plants Grown")
+        self.tree_analytics.pack(fill="both", expand=True, padx=20, pady=10)
+        ttk.Button(self.frame_analytics, text="Refresh Analytics", command=self.refresh_analytics).pack(pady=10)
+
+    # --- LOGIC & AUDITING
+    def log_audit(self, action, table, rec_id):
+        try:
+            sql = "INSERT INTO system_audit_log (user_id, action_type, table_affected, record_id) VALUES (%s, %s, %s, %s)"
+            self.cursor.execute(sql, (self.user_id, action, table, rec_id))
+            self.conn.commit()
+        except: pass
+
     def refresh_table(self):
-        for row in self.tree.get_children():
-            self.tree.delete(row)
-        search_term = self.search_var.get()
+        for row in self.tree.get_children(): self.tree.delete(row)
+        search = f"%{self.search_var.get()}%"
         query = """
             SELECT p.inventory_id, p.nickname, r.common_name, p.date_planted, p.status, g.name 
             FROM plants_inventory p
             JOIN ref_species r ON p.species_id = r.species_id
             JOIN gardens g ON p.garden_id = g.garden_id
-            WHERE p.nickname LIKE %s
-            ORDER BY p.inventory_id ASC
+            WHERE p.nickname LIKE %s ORDER BY p.inventory_id ASC
         """
-        self.cursor.execute(query, (f"%{search_term}%",))
+        self.cursor.execute(query, (search,))
+        for row in self.cursor.fetchall(): self.tree.insert("", "end", values=row)
+
+    def refresh_analytics(self):
+        for row in self.tree_analytics.get_children(): self.tree_analytics.delete(row)
+        query = """
+            SELECT r.common_name, COUNT(p.inventory_id) as total
+            FROM plants_inventory p
+            JOIN ref_species r ON p.species_id = r.species_id
+            GROUP BY r.common_name
+        """
+        self.cursor.execute(query)
         for row in self.cursor.fetchall():
-            self.tree.insert("", "end", values=row)
+            self.tree_analytics.insert("", "end", values=row)
+            try:
+                self.cursor.execute("INSERT INTO mart_yield_analytics (species_id, total_yield_count) SELECT species_id, 1 FROM ref_species WHERE common_name=%s", (row[0],))
+                self.conn.commit()
+            except: pass
 
     def clear_filter(self):
         self.search_var.set("")
@@ -260,11 +344,8 @@ class SproutLogGUI:
             nick = self.entry_nickname.get()
             spec_name = self.combo_species.get()
             gard_name = self.combo_garden.get()
-            if spec_name == "Choose Species..." or gard_name == "Choose Garden...":
-                messagebox.showwarning("Missing Info", "Please select a valid Species and Garden.")
-                return
-            if not nick:
-                messagebox.showerror("Error", "Please enter a nickname.")
+            if spec_name == "Choose Species..." or gard_name == "Choose Garden..." or not nick:
+                messagebox.showerror("Error", "Missing fields.")
                 return
 
             spec_id = self.species_map[spec_name]
@@ -272,6 +353,8 @@ class SproutLogGUI:
             sql = "INSERT INTO plants_inventory (garden_id, species_id, nickname, date_planted, status) VALUES (%s, %s, %s, %s, 'Growing')"
             self.cursor.execute(sql, (gard_id, spec_id, nick, date.today()))
             self.conn.commit()
+            new_id = self.cursor.lastrowid
+            self.log_audit("INSERT", "plants_inventory", new_id)
             messagebox.showinfo("Success", f"{nick} planted!")
             self.entry_nickname.delete(0, 'end')
             self.refresh_table()
@@ -285,7 +368,57 @@ class SproutLogGUI:
         plant_id = self.tree.item(selected[0])['values'][0]
         self.cursor.execute("UPDATE plants_inventory SET status = 'Harvested' WHERE inventory_id = %s", (plant_id,))
         self.conn.commit()
+        self.log_audit("UPDATE_STATUS", "plants_inventory", plant_id)
         self.refresh_table()
+
+    def report_sickness(self):
+        # 1. Check if a plant is selected
+        selected = self.tree.selection()
+        if not selected: 
+            messagebox.showwarning("Select Plant", "Please select a plant first.")
+            return
+        
+        plant_id = self.tree.item(selected[0])['values'][0]
+        plant_name = self.tree.item(selected[0])['values'][1]
+        
+        # 2. Create a Custom Popup Window
+        popup = tk.Toplevel(self.root)
+        popup.title(f"Report Issue for {plant_name}")
+        popup.geometry("350x250")
+        
+        # Label & Entry for "Issue Type"
+        tk.Label(popup, text="What is the issue? (e.g. Mold, Bugs)", font=("Arial", 10)).pack(pady=10)
+        ent_issue = ttk.Entry(popup, width=30)
+        ent_issue.pack(pady=5)
+        
+        # Label & Dropdown for "Severity"
+        tk.Label(popup, text="Severity Level (1 = Mild, 5 = Severe)", font=("Arial", 10)).pack(pady=10)
+        combo_severity = ttk.Combobox(popup, values=["1", "2", "3", "4", "5"], state="readonly", width=27)
+        combo_severity.current(0) # Default to '1'
+        combo_severity.pack(pady=5)
+        
+        # 3. Submit Logic inside the popup
+        def submit_report():
+            issue = ent_issue.get()
+            severity = combo_severity.get()
+            
+            if not issue:
+                messagebox.showerror("Error", "Please describe the issue.", parent=popup)
+                return
+            
+            try:
+                sql = "INSERT INTO plant_health_events (inventory_id, issue_type, severity_level, event_date) VALUES (%s, %s, %s, %s)"
+                self.cursor.execute(sql, (plant_id, issue, severity, date.today()))
+                self.conn.commit()
+                
+                self.log_audit("REPORT_SICKNESS", "plant_health_events", plant_id)
+                messagebox.showinfo("Logged", "Health issue recorded in database.", parent=popup)
+                popup.destroy() # Close the popup
+            except Exception as e:
+                messagebox.showerror("Error", str(e), parent=popup)
+
+        # Submit Button
+        ttk.Button(popup, text="💾 Save Report", command=submit_report).pack(pady=20)
 
     def delete_plant(self):
         selected = self.tree.selection()
@@ -294,7 +427,7 @@ class SproutLogGUI:
         if messagebox.askyesno("Confirm", "Delete this plant?"):
             self.cursor.execute("DELETE FROM plants_inventory WHERE inventory_id = %s", (plant_id,))
             self.conn.commit()
-            # SMART RESET ID
+            self.log_audit("DELETE", "plants_inventory", plant_id)
             self.cursor.execute("SELECT COUNT(*) FROM plants_inventory")
             if self.cursor.fetchone()[0] == 0:
                 self.cursor.execute("ALTER TABLE plants_inventory AUTO_INCREMENT = 1")
