@@ -1,24 +1,29 @@
 # SproutLog: Smart Garden Manager
 
 ## Project Goal
-SproutLog is a data-driven gardening management application designed to help users track their plant inventory and monitor growing conditions. By integrating specific garden data with public biological and environmental datasets, the app provides intelligent insights—such as correlating plant growth with historical weather patterns and analyzing potential disease risks based on daily environmental logs.
+SproutLog is a data-driven gardening management application designed to help users track their plant inventory, monitor growing conditions, and manage gardening resources. By integrating specific garden data with public biological and environmental datasets, the app provides intelligent insights—such as correlating plant growth with historical weather patterns and analyzing potential disease risks based on daily environmental logs.
 
 ## Application Features (GUI)
 The application has been upgraded from a CLI to a full **Graphical User Interface (GUI)** built with Python/Tkinter.
 * **User Authentication:** Secure login screen with password hashing and automatic account creation.
 * **Dynamic Geocoding:** Integrates the **Zippopotam.us API** to auto-detect location coordinates from Zip Codes.
 * **Live Weather:** Integrates the **Open-Meteo API** to fetch and log daily weather metrics (Temp/Rain) for the user's specific location.
+* **Garden Management:** dedicated interface to manage garden details (Length, Width, Sun Exposure) for specific locations (Backyard, Greenhouse, etc.).
 * **Inventory Management (CRUD):**
     * **Create:** "Plant" new crops by selecting from the USDA reference database.
     * **Read:** View all plants with sorting and filtering options.
     * **Update:** Mark plants as "Harvested" to track status changes.
     * **Delete:** Remove plants (with auto-resetting ID logic for clean demos).
     * **Filter:** Real-time search bar to find plants by nickname.
+* **Health & Analytics:**
+    * **Health Reporting:** Log specific sickness events (bugs, mold) with severity levels.
+    * **Yield Analytics:** A dedicated dashboard tab showing aggregated crop performance (Mart Data).
+    * **Auditing:** Background system logging for all critical user actions (Inserts/Deletes/Updates).
 
 ## Public Datasets Used
 1.  **USDA PLANTS Database:**
     * **Type:** CSV Import (Reference Data)
-    * **Usage:** Created a much smaller table of only about 30 common plants because I felt much of the giant database would go unused. Populates the `ref_species` table with scientific names, common names, and families to ensure accurate plant identification.
+    * **Usage:** Created a curated table of ~30 common garden plants (reduced from the full dataset for performance). Populates the `ref_species` table with scientific names, common names, and families.
     * **Link:** https://plants.usda.gov/downloads
 2.  **Open-Meteo API:**
     * **Type:** REST API (Public Domain)
@@ -30,7 +35,7 @@ The application has been upgraded from a CLI to a full **Graphical User Interfac
     * **Link:** https://www.kaggle.com/datasets/turakut/plant-disease-classification
 
 ## How to Run
-1.  **Database Setup:** Import the `schema.sql` file into your MySQL server to create the 20 tables.
+1.  **Database Setup:** Import the `schema.sql` file into your MySQL server to create the 23 tables.
 2.  **Install Dependencies:**
     ```bash
     pip install mysql-connector-python requests
@@ -41,8 +46,8 @@ The application has been upgraded from a CLI to a full **Graphical User Interfac
     python gui_app.py
     ```
 
-## Database Schema (20 Tables)
-The database structure has been expanded to support Finances, Tools, and Social features.
+## Database Schema (23 Tables)
+The database structure supports Core Users, Inventory, Finance, Tools, Social, and Analytics.
 
 ```mermaid
 erDiagram
@@ -67,6 +72,15 @@ erDiagram
         int garden_id PK
         int user_id FK
         string name
+        float length_ft
+        float width_ft
+        string sun_exposure
+    }
+    SYSTEM_AUDIT_LOG {
+        int audit_id PK
+        int user_id FK
+        string action_type
+        string table_affected
     }
 
     %% --- INVENTORY & OPERATIONS ---
@@ -87,6 +101,12 @@ erDiagram
         int inventory_id FK
         int quantity
     }
+    PLANT_HEALTH_EVENTS {
+        int event_id PK
+        int inventory_id FK
+        string issue_type
+        int severity
+    }
 
     %% --- REFERENCE DATA ---
     REF_SPECIES {
@@ -105,6 +125,11 @@ erDiagram
         float temperature
         float humidity
         int disease_present
+    }
+    MART_YIELD_ANALYTICS {
+        int mart_id PK
+        int species_id FK
+        int total_yield_count
     }
 
     %% --- FINANCES & SUPPLIERS ---
@@ -177,6 +202,7 @@ erDiagram
     USERS ||--o{ SOCIAL_POSTS : creates
     USERS ||--o{ POST_COMMENTS : writes
     USERS ||--o{ USER_CHALLENGES : participates_in
+    USERS ||--o{ SYSTEM_AUDIT_LOG : generates
 
     %% Inventory Logic
     GARDENS ||--o{ PLANTS_INVENTORY : contains
@@ -184,6 +210,10 @@ erDiagram
     PLANTS_INVENTORY ||--o{ CARE_LOGS : requires
     PLANTS_INVENTORY ||--o{ HARVESTS : produces
     PLANTS_INVENTORY ||--o{ PLANT_FERTILIZER_LINK : treated_with
+    PLANTS_INVENTORY ||--o{ PLANT_HEALTH_EVENTS : suffers
+
+    %% Analytics & Marts
+    REF_SPECIES ||--o{ MART_YIELD_ANALYTICS : aggregated_in
 
     %% Finances & Tools
     SUPPLIERS ||--o{ EXPENSES : paid_to
@@ -196,8 +226,4 @@ erDiagram
 
     %% Analytical Links (Logical)
     USERS }|..|{ BG_WEATHER_DAILY : "located_in"
-    BG_WEATHER_DAILY }|..|{ REF_DISEASE_MODEL : "analyzed_against"
-
-    %% Logical Relationships (Analysis)
-    USERS }|..|{ BG_WEATHER_DAILY : "located_in (zip)"
     BG_WEATHER_DAILY }|..|{ REF_DISEASE_MODEL : "analyzed_against"
