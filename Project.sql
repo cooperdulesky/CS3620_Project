@@ -217,6 +217,42 @@ CREATE TABLE post_comments (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+USE sproutlog;
+
+-- 21. AUDIT LOG (Required by prompt: "At least 1 audit/log table")
+-- Tracks every time a user adds or deletes a plant
+CREATE TABLE system_audit_log (
+    audit_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    action_type VARCHAR(50), -- e.g., "INSERT", "DELETE"
+    table_affected VARCHAR(50),
+    record_id INT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- 22. HEALTH EVENTS (Making the Disease Dataset useful)
+-- Links specific plants to health issues
+CREATE TABLE plant_health_events (
+    event_id INT AUTO_INCREMENT PRIMARY KEY,
+    inventory_id INT,
+    issue_type VARCHAR(100), -- e.g., "Fungal Infection", "Pest"
+    severity_level INT CHECK (severity_level BETWEEN 1 AND 5),
+    notes TEXT,
+    event_date DATE,
+    FOREIGN KEY (inventory_id) REFERENCES plants_inventory(inventory_id) ON DELETE CASCADE
+);
+
+-- 23. ANALYTICS MART (Required by prompt: "Derived/summary tables")
+-- This table aggregates harvest data so we don't have to calculate it live every time
+CREATE TABLE mart_yield_analytics (
+    mart_id INT AUTO_INCREMENT PRIMARY KEY,
+    species_id INT,
+    total_yield_count INT DEFAULT 0,
+    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (species_id) REFERENCES ref_species(species_id)
+);
+
 
 
 -- show tables for demo
@@ -224,14 +260,26 @@ SELECT * FROM users;
 SELECT * FROM bg_weather_daily;
 SELECT * FROM gardens;
 SELECT * FROM plants_inventory;
+SELECT * FROM system_audit_log;
+SELECT 
+    h.event_id,
+    p.nickname AS 'Plant Name',
+    h.issue_type AS 'Issue',
+    h.severity_level AS 'Severity (1-5)',
+    h.event_date
+FROM plant_health_events h
+JOIN plants_inventory p ON h.inventory_id = p.inventory_id;
 
--- Clear the 4 tables the script touches
+
+-- Clear the tables the script touches
 SET FOREIGN_KEY_CHECKS = 0;
 
 TRUNCATE TABLE plants_inventory;
 TRUNCATE TABLE gardens;
 TRUNCATE TABLE users;
 TRUNCATE TABLE bg_weather_daily;
+TRUNCATE TABLE system_audit_log;
+TRUNCATE TABLE plant_health_events;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
